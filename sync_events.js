@@ -1,13 +1,25 @@
-// sync_events.js — Firestore 동기화(계정별). auth.js 이후 로드 필수.
+
+// sync_events_lp.js — Firestore 동기화 + Long‑Polling 우선 적용
+// 학교/공용망에서 WebChannel이 막혀 400/transport errored가 뜰 때 사용하세요.
+
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp
+  getApp
+} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import {
+  initializeFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
-console.log("[sync] loaded (compat)");
+console.log("[sync-lp] loaded");
 
-const auth = getAuth();          // 기본 앱 사용 (auth.js에서 initializeApp 이미 실행됨)
-const db   = getFirestore();     // 기본 앱 사용
+const app = getApp();
+// Long-polling 자동 감지(필요 시 강제 전환). 일부 환경에서는 이 옵션이 필수입니다.
+const db  = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+  // experimentalForceLongPolling: true,   // 위 옵션으로도 안 될 때 이 줄의 주석을 해제
+  // useFetchStreams: false,               // 일부 구형 브라우저/프록시에서 필요하면 해제
+});
+const auth = getAuth();
 
 let unsub = null;
 let isApplyingRemote = false;
@@ -22,7 +34,7 @@ function setLocalEvents(arr){
     window.EVENTS_USER = Array.isArray(arr) ? arr : [];
     if (typeof window.saveUserEvents === "function") window.saveUserEvents();
     if (typeof window.render === "function" && window.current) window.render(window.current);
-  }catch(e){ console.warn("[sync] setLocalEvents error", e); }
+  }catch(e){ console.warn("[sync-lp] setLocalEvents error", e); }
 }
 
 // ---- 클라우드 저장/불러오기 ----
@@ -30,12 +42,8 @@ async function cloudSave(){
   const u = auth.currentUser; if (!u) return;
   const ref = doc(db, "users", u.uid);
   const events = getLocalEvents();
-  await setDoc(ref, {
-    email: u.email,
-    events: events,
-    updatedAt: serverTimestamp()
-  }, { merge: true });
-  console.log("[sync] saved", events.length, "events");
+  await setDoc(ref, { email: u.email, events, updatedAt: serverTimestamp() }, { merge: true });
+  console.log("[sync-lp] saved", events.length, "events");
 }
 
 async function cloudLoadOnce(uid){
@@ -47,15 +55,14 @@ async function cloudLoadOnce(uid){
       isApplyingRemote = true;
       setLocalEvents(data.events);
       isApplyingRemote = false;
-      console.log("[sync] loaded", data.events.length, "events from cloud");
-    } else {
-      console.log("[sync] no events field yet");
-      if (getLocalEvents().length) await cloudSave();
+      console.log("[sync-lp] loaded", data.events.length, "events from cloud");
+    } else if (getLocalEvents().length){
+      await cloudSave();
     }
   } else {
     await setDoc(ref, { email: auth.currentUser.email, events: [], createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
     if (getLocalEvents().length) await cloudSave();
-    console.log("[sync] created user doc");
+    console.log("[sync-lp] created user doc");
   }
 }
 
@@ -70,16 +77,16 @@ function hookSave(){
     }
     wrapped.__cloudHooked = true;
     window.saveUserEvents = wrapped;
-    console.log("[sync] saveUserEvents hooked");
+    console.log("[sync-lp] saveUserEvents hooked");
   }
 }
 
 // ---- 로그인 상태 관찰 ----
 onAuthStateChanged(auth, async (user)=>{
   if (typeof unsub === "function"){ unsub(); unsub = null; }
-  if (!user){ console.log("[sync] signed out — stop syncing"); return; }
+  if (!user){ console.log("[sync-lp] signed out — stop syncing"); return; }
 
-  try { hookSave(); } catch(e){ console.warn("[sync] hookSave error", e); }
+  try { hookSave(); } catch(e){ console.warn("[sync-lp] hookSave error", e); }
 
   await cloudLoadOnce(user.uid);
 
@@ -93,9 +100,9 @@ onAuthStateChanged(auth, async (user)=>{
         isApplyingRemote = true;
         setLocalEvents(data.events);
         isApplyingRemote = false;
-        console.log("[sync] applied remote update", data.events.length);
+        console.log("[sync-lp] applied remote update", data.events.length);
       }
     }
   });
-  console.log("[sync] realtime subscription started");
+  console.log("[sync-lp] realtime subscription started");
 });
