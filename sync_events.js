@@ -60,10 +60,16 @@ function startPolling(u){
   window.addEventListener("beforeunload", ()=> { try { cloudSave("unload"); } catch {} });
 }
 
+
 onAuthStateChanged(auth, async (user)=>{
   if (!user){ if (pollTimer) clearInterval(pollTimer); pollTimer=null; console.log("[sync-poll] signed out"); return; }
   try { hookSave(); } catch {}
   await loadOnce(user);
   startPolling(user);
+});
+const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+  experimentalForceLongPolling: true,
+  useFetchStreams: false,
 });
 window.phhsSyncSave = ()=> cloudSave("manual");
