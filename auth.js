@@ -2,6 +2,10 @@
 // 정적 사이트(깃허브 Pages/Netlify 등)에서 바로 동작하도록 Firebase v10 CDN 모듈 사용
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+  useFetchStreams: false
+});
 import {
   getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence,
   signInWithPopup, onAuthStateChanged, signOut
@@ -106,3 +110,4 @@ onAuthStateChanged(auth, (user) => {
 
 // 디버깅용
 window.phhsAuth = { auth, signOut, onAuthStateChanged };
+
