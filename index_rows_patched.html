@@ -357,6 +357,9 @@ function saveUserEvents(){
   localStorage.setItem('customEvents.v1', JSON.stringify(EVENTS_USER));
   if (typeof updateMeta === 'function') updateMeta();
 }
+window.saveUserEvents = saveUserEvents;
+  // (선택) 현재 달 다시 그리는 함수도 전역에 노출하면 적용 표시에 도움
+window.render = typeof render === 'function' ? render : undefined;
 
   function updateMeta(){
   const metaCount=document.getElementById('metaCount');
